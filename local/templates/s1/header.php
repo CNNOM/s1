@@ -13,6 +13,7 @@ IncludeTemplateLangFile(__FILE__);
 </head>
 
 <header class="header">
+  <?$APPLICATION->ShowPanel();?>
   <div class="inner"><a class="header__logo" href="/">
       <svg class="svg-icon svg-icon--icon_logo2">
         <use xlink:href="img/sprite.svg#icon_logo2"></use>
