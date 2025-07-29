@@ -1,6 +1,6 @@
 <?php if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
-    die; ?>
-
+    die; 
+?>
 <div class="inner">
     <section class="section">
         <div class="currency-exchange">
@@ -18,25 +18,18 @@
                         <div class="ui-p4">Валюта</div>
                         <div class="ui-p4">Покупка</div>
                         <div class="ui-p4">Продажа</div>
-                        <div class="ui-p4">ЦБ РФ</div>
                     </div>
                     <?php foreach ($arResult['TODAY_RATES'] as $item): ?>
                         <div class="currency-exchange__line">
-                            <div class="ui-p1"><?= $item['UF_CURRENCY'] ?></div>
+                            <div class="ui-p1"><?= $item['UF_CURRENCY'] ?><span>/RUB</span></div>
                             <div class="ui-p1"><?= $item['UF_BUY'] ?>
-                                <div class="currency-exchange__drop"></div>
                             </div>
                             <div class="ui-p1"><?= $item['UF_SALE'] ?>
-                                <div class="currency-exchange__grow"></div>
-                            </div>
-                            <div class="ui-p1"><?= $item['UF_CB_RF'] ?>
-                                <div class="currency-exchange__grow"></div>
                             </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
             </div>
-
             <div class="currency-exchange__image">
                 <img src="<?= SITE_TEMPLATE_PATH ?>/img/main/currency-exchange_img1.png" alt="Курсы обмена валют" />
             </div>
