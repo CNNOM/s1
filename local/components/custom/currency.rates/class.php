@@ -12,6 +12,7 @@ class CurrencyRatesComponent extends CBitrixComponent
 {
     private const MAX_ITEMS_LIMIT = 100;
     private const CBR_API_URL = 'http://www.cbr.ru/scripts/XML_daily.asp';
+    private const UPDATE_HOUR = 5;
 
     private $entityClass;
 
@@ -60,16 +61,22 @@ class CurrencyRatesComponent extends CBitrixComponent
     private function prepareResult(): void
     {
         $currentDate = new Date(date('Y-m-d'), 'Y-m-d');
+        $currentTime = new DateTime();
+        $currentHour = (int) $currentTime->format('G');
+
         $todayRates = $this->getTodayRates($currentDate);
 
         $hasUSD = $this->checkCurrency($todayRates, 'USD');
         $hasEUR = $this->checkCurrency($todayRates, 'EUR');
 
-        if (!$hasUSD || !$hasEUR) {
+
+        $shouldUpdate = $currentHour >= self::UPDATE_HOUR && (!$hasUSD || !$hasEUR);
+
+        if ($shouldUpdate || !$hasUSD || !$hasEUR) {
             $apiRates = $this->getCourseApi($currentDate, !$hasUSD, !$hasEUR);
             $todayRates = array_merge($todayRates, $apiRates);
         }
-        
+
         $this->arResult = [
             'HL_BLOCK_ID' => $this->arParams['HL_BLOCK_ID'],
             'CURRENT_DATE' => $currentDate->format('d.m.Y'),
@@ -106,7 +113,7 @@ class CurrencyRatesComponent extends CBitrixComponent
         return false;
     }
 
-    private function getCourseApi(Date $date, bool $needUSD, bool $needEUR): array
+    private function getCourseApi(Date $date, bool $hasUSD, bool $hasEUR): array
     {
         $dateFormatted = $date->format('d/m/Y');
         $url = self::CBR_API_URL . '?date_req=' . $dateFormatted;
@@ -119,13 +126,15 @@ class CurrencyRatesComponent extends CBitrixComponent
         $rates = [];
         foreach ($xml->Valute as $valute) {
             $code = (string) $valute->CharCode;
-            if (($needUSD && $code === 'USD') || ($needEUR && $code === 'EUR')) {
+
+            if (($hasUSD && $code === 'USD') || ($hasEUR && $code === 'EUR')) {
+                $value = (float) str_replace(',', '.', (string) $valute->Value);
+                $vunitRate = (float) str_replace(',', '.', (string) $valute->VunitRate);
                 $rate = [
                     'UF_DATE' => $date,
                     'UF_CURRENCY' => (string) $valute->CharCode,
-                    'UF_CURRENCY_NAME' => (string) $valute->Name,
-                    'UF_BUY' => (float) $valute->Value,
-                    'UF_SALE' => (float) $valute->VunitRate,
+                    'UF_BUY' => (float) $value,
+                    'UF_SALE' => (float) $vunitRate,
                 ];
 
                 $result = $this->entityClass::add($rate);

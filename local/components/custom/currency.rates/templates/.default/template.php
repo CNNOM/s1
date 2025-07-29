@@ -1,5 +1,5 @@
 <?php if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
-    die; 
+    die;
 ?>
 <div class="inner">
     <section class="section">
@@ -37,9 +37,8 @@
     </section>
 </div>
 
-
-
-
-
-
-
+<form method="get" action="" class="date-selector" data-from>
+    <input data-input type="date" id="currency-datepicker" name="currency_date"
+        value="<?= $arResult['CURRENT_DATE'] ?>" class="datepicker-input">
+    <button type="submit" class="datepicker-submit">Показать</button>
+</form>
