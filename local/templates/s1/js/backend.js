@@ -8,19 +8,26 @@ function forms() {
         e.preventDefault();
         const form = $(this);
         const dateValue = form.find('[name="currency_date"]').val();
-        const url = window.location.pathname + '?ajax=Y&currency_date=' + dateValue;
         
-        $.ajax({
-            type: "GET",
-            url: url,
+        BX.ajax({
+            url: window.location.pathname + '?ajax=Y&currency_date=' + dateValue,
+            method: 'GET',
             dataType: 'html',
-            cache: false,
-            success: function (response) {
-
-                // console.log('Успешный ответ:', response);
+            onsuccess: function(response) {
+                var tempDiv = document.createElement('div');
+                tempDiv.innerHTML = response;
+                
+                var responseContent = tempDiv.querySelector('[data-content]');
+                var pageContent = document.querySelector('[data-content]');
+                
+                if (responseContent && pageContent) {
+                    BX.adjust(pageContent, {
+                        html: responseContent.innerHTML
+                    });
+                }
             },
-            error: function (xhr, status, error) {
-                // console.error("AJAX error:", status, error);
+            onfailure: function(response) {
+                console.error('AJAX error:', response);
             }
         });
     });

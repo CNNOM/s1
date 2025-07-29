@@ -15,7 +15,7 @@
         '',
         [
             'HL_BLOCK_ID' => 2,
-            'FILTER' => 'arFilter',
+            'FILTER' => $arFilter,
         ]
     );
 

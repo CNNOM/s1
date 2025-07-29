@@ -1,8 +1,8 @@
 <?php if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true)
     die;
 ?>
-<div class="inner">
-    <section class="section">
+<div class="inner" >
+    <section class="section" data-content>
         <div class="currency-exchange">
             <div class="currency-exchange__content">
                 <div class="currency-exchange__heading">
@@ -37,8 +37,7 @@
     </section>
 </div>
 
-<form method="get" action="" class="date-selector" data-from>
-    <input data-input type="date" id="currency-datepicker" name="currency_date"
-        value="<?= $arResult['CURRENT_DATE'] ?>" class="datepicker-input">
-    <button type="submit" class="datepicker-submit">Показать</button>
+<form data-from>
+    <input data-input type="date" id="currency-datepicker" name="currency_date" value="<?= $arResult['CURRENT_DATE'] ?>">
+    <button type="submit">Показать</button>
 </form>

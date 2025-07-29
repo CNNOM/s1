@@ -60,26 +60,30 @@ class CurrencyRatesComponent extends CBitrixComponent
 
     private function prepareResult(): void
     {
-        $currentDate = new Date(date('Y-m-d'), 'Y-m-d');
+        $filterDate = !empty($this->arParams['FILTER']['DATE'])
+            ? new Date($this->arParams['FILTER']['DATE'], 'Y-m-d')
+            : new Date(date('Y-m-d'), 'Y-m-d');
+
         $currentTime = new DateTime();
         $currentHour = (int) $currentTime->format('G');
 
-        $todayRates = $this->getTodayRates($currentDate);
+        $todayRates = $this->getTodayRates($filterDate);
 
         $hasUSD = $this->checkCurrency($todayRates, 'USD');
         $hasEUR = $this->checkCurrency($todayRates, 'EUR');
 
-
-        $shouldUpdate = $currentHour >= self::UPDATE_HOUR && (!$hasUSD || !$hasEUR);
+        $shouldUpdate = $filterDate->format('Y-m-d') === date('Y-m-d')
+            && $currentHour >= self::UPDATE_HOUR
+            && (!$hasUSD || !$hasEUR);
 
         if ($shouldUpdate || !$hasUSD || !$hasEUR) {
-            $apiRates = $this->getCourseApi($currentDate, !$hasUSD, !$hasEUR);
+            $apiRates = $this->getCourseApi($filterDate, !$hasUSD, !$hasEUR);
             $todayRates = array_merge($todayRates, $apiRates);
         }
 
         $this->arResult = [
             'HL_BLOCK_ID' => $this->arParams['HL_BLOCK_ID'],
-            'CURRENT_DATE' => $currentDate->format('d.m.Y'),
+            'CURRENT_DATE' => $filterDate->format('d.m.Y'),
             'TODAY_RATES' => $todayRates,
             'ITEMS' => $this->getAllRates(),
         ];
