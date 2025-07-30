@@ -11,7 +11,7 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
 class CurrencyRatesComponent extends CBitrixComponent
 {
     private const MAX_ITEMS_LIMIT = 100;
-    private const CBR_API_URL = 'http://www.cbr.ru/scripts/XML_daily.asp';
+    private const CBR_API_URL = 'http://www.cbr.ru/scripts/XML_daily.asp?date_req=';
     private const UPDATE_HOUR = 5;
 
     private $entityClass;
@@ -25,10 +25,9 @@ class CurrencyRatesComponent extends CBitrixComponent
         if (!$this->initializeHighloadBlock()) {
             return;
         }
-        
+
         $this->prepareResult();
     }
-
     private function validateParameters(): bool
     {
         if (empty($this->arParams['HL_BLOCK_ID'])) {
@@ -37,7 +36,7 @@ class CurrencyRatesComponent extends CBitrixComponent
         }
         return true;
     }
-    
+
     private function initializeHighloadBlock(): bool
     {
         if (!Loader::includeModule('highloadblock')) {
@@ -60,6 +59,7 @@ class CurrencyRatesComponent extends CBitrixComponent
     private function prepareResult(): void
     {
         $filterDate = $this->getFilterDate();
+
         $todayRates = $this->processCurrencyData($filterDate);
 
         $this->arResult = [
@@ -83,9 +83,9 @@ class CurrencyRatesComponent extends CBitrixComponent
     {
         $todayRates = $this->getTodayRates($filterDate);
 
-        if ($this->shouldUpdateRates($filterDate, $todayRates)) {
+        if (empty($todayRates) || $this->shouldUpdateRates($filterDate, $todayRates)) {
             $apiRates = $this->fetchAndSaveApiRates($filterDate, $todayRates);
-            $todayRates = array_merge($todayRates, $apiRates);
+            $todayRates = !empty($apiRates) ? $apiRates : $todayRates;
         }
 
         return $todayRates;
@@ -105,6 +105,7 @@ class CurrencyRatesComponent extends CBitrixComponent
     {
         $hasUSD = !$this->checkCurrency($existingRates, 'USD');
         $hasEUR = !$this->checkCurrency($existingRates, 'EUR');
+
 
         return $this->getCourseApi($date, $hasUSD, $hasEUR);
     }
@@ -140,6 +141,7 @@ class CurrencyRatesComponent extends CBitrixComponent
     private function getCourseApi(Date $date, bool $hasUSD, bool $hasEUR): array
     {
         $xmlData = $this->fetchXmlData($date);
+
         if ($xmlData === false) {
             return [];
         }
@@ -150,16 +152,25 @@ class CurrencyRatesComponent extends CBitrixComponent
     private function fetchXmlData(Date $date): SimpleXMLElement|bool
     {
         $dateFormatted = $date->format('d/m/Y');
-        return simplexml_load_file(self::CBR_API_URL . '?date_req=' . $dateFormatted);
+        return simplexml_load_file(self::CBR_API_URL . $dateFormatted);
     }
 
+    /**
+     * Парсинг XML с курсами валют и сохранение в HL
+     * @param SimpleXMLElement $xml XML-данные курсов валют от ЦБ РФ
+     * @param Date $date Дата актуальности курсов
+     * @param bool $hasUSD Флаг провер обработки доллара США (USD)
+     * @param bool $hasEUR Флаг необходимости обработки евро (EUR)
+     * 
+     * @return array Массив курсов валют
+     */
     private function parseAndSaveXmlRates(SimpleXMLElement $xml, Date $date, bool $hasUSD, bool $hasEUR): array
     {
         $rates = [];
         foreach ($xml->Valute as $valute) {
             $code = (string) $valute->CharCode;
 
-            if ($this->shouldProcessCurrency($code, $hasUSD, $hasEUR)) {
+            if (($hasUSD && $code === 'USD') || ($hasEUR && $code === 'EUR')) {
                 $rate = $this->createRateArray($valute, $date);
                 $savedRate = $this->saveRate($rate);
 
@@ -169,11 +180,6 @@ class CurrencyRatesComponent extends CBitrixComponent
             }
         }
         return $rates;
-    }
-
-    private function shouldProcessCurrency(string $code, bool $hasUSD, bool $hasEUR): bool
-    {
-        return ($hasUSD && $code === 'USD') || ($hasEUR && $code === 'EUR');
     }
 
     private function createRateArray(SimpleXMLElement $valute, Date $date): array

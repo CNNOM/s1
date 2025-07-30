@@ -14,7 +14,7 @@
         'custom:currency.rates',
         '',
         [
-            'HL_BLOCK_ID' => 2,
+            'HL_BLOCK_ID' => ID_HL_CURRENCY_RATES,
             'FILTER' => $arFilter,
         ]
     );
