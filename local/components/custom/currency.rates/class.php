@@ -25,9 +25,8 @@ class CurrencyRatesComponent extends CBitrixComponent
         if (!$this->initializeHighloadBlock()) {
             return;
         }
-
+        
         $this->prepareResult();
-        $this->includeComponentTemplate();
     }
 
     private function validateParameters(): bool
@@ -38,7 +37,7 @@ class CurrencyRatesComponent extends CBitrixComponent
         }
         return true;
     }
-
+    
     private function initializeHighloadBlock(): bool
     {
         if (!Loader::includeModule('highloadblock')) {
@@ -60,26 +59,8 @@ class CurrencyRatesComponent extends CBitrixComponent
 
     private function prepareResult(): void
     {
-        $filterDate = !empty($this->arParams['FILTER']['DATE'])
-            ? new Date($this->arParams['FILTER']['DATE'], 'Y-m-d')
-            : new Date(date('Y-m-d'), 'Y-m-d');
-
-        $currentTime = new DateTime();
-        $currentHour = (int) $currentTime->format('G');
-
-        $todayRates = $this->getTodayRates($filterDate);
-
-        $hasUSD = $this->checkCurrency($todayRates, 'USD');
-        $hasEUR = $this->checkCurrency($todayRates, 'EUR');
-
-        $shouldUpdate = $filterDate->format('Y-m-d') === date('Y-m-d')
-            && $currentHour >= self::UPDATE_HOUR
-            && (!$hasUSD || !$hasEUR);
-
-        if ($shouldUpdate || !$hasUSD || !$hasEUR) {
-            $apiRates = $this->getCourseApi($filterDate, !$hasUSD, !$hasEUR);
-            $todayRates = array_merge($todayRates, $apiRates);
-        }
+        $filterDate = $this->getFilterDate();
+        $todayRates = $this->processCurrencyData($filterDate);
 
         $this->arResult = [
             'HL_BLOCK_ID' => $this->arParams['HL_BLOCK_ID'],
@@ -87,6 +68,45 @@ class CurrencyRatesComponent extends CBitrixComponent
             'TODAY_RATES' => $todayRates,
             'ITEMS' => $this->getAllRates(),
         ];
+
+        $this->includeComponentTemplate();
+    }
+
+    private function getFilterDate(): Date
+    {
+        return !empty($this->arParams['FILTER']['DATE'])
+            ? new Date($this->arParams['FILTER']['DATE'], 'Y-m-d')
+            : new Date(date('Y-m-d'), 'Y-m-d');
+    }
+
+    private function processCurrencyData(Date $filterDate): array
+    {
+        $todayRates = $this->getTodayRates($filterDate);
+
+        if ($this->shouldUpdateRates($filterDate, $todayRates)) {
+            $apiRates = $this->fetchAndSaveApiRates($filterDate, $todayRates);
+            $todayRates = array_merge($todayRates, $apiRates);
+        }
+
+        return $todayRates;
+    }
+
+    private function shouldUpdateRates(Date $filterDate, array $todayRates): bool
+    {
+        $currentHour = (int) (new DateTime())->format('G');
+        $isToday = $filterDate->format('Y-m-d') === date('Y-m-d');
+        $isUpdateTime = $currentHour >= self::UPDATE_HOUR;
+        $missingCurrencies = !$this->checkCurrency($todayRates, 'USD') || !$this->checkCurrency($todayRates, 'EUR');
+
+        return $isToday && $isUpdateTime && $missingCurrencies;
+    }
+
+    private function fetchAndSaveApiRates(Date $date, array $existingRates): array
+    {
+        $hasUSD = !$this->checkCurrency($existingRates, 'USD');
+        $hasEUR = !$this->checkCurrency($existingRates, 'EUR');
+
+        return $this->getCourseApi($date, $hasUSD, $hasEUR);
     }
 
     private function getTodayRates(Date $date): array
@@ -119,35 +139,65 @@ class CurrencyRatesComponent extends CBitrixComponent
 
     private function getCourseApi(Date $date, bool $hasUSD, bool $hasEUR): array
     {
-        $dateFormatted = $date->format('d/m/Y');
-        $url = self::CBR_API_URL . '?date_req=' . $dateFormatted;
-
-        $xml = simplexml_load_file($url);
-        if ($xml === false) {
+        $xmlData = $this->fetchXmlData($date);
+        if ($xmlData === false) {
             return [];
         }
 
+        return $this->parseAndSaveXmlRates($xmlData, $date, $hasUSD, $hasEUR);
+    }
+
+    private function fetchXmlData(Date $date): SimpleXMLElement|bool
+    {
+        $dateFormatted = $date->format('d/m/Y');
+        return simplexml_load_file(self::CBR_API_URL . '?date_req=' . $dateFormatted);
+    }
+
+    private function parseAndSaveXmlRates(SimpleXMLElement $xml, Date $date, bool $hasUSD, bool $hasEUR): array
+    {
         $rates = [];
         foreach ($xml->Valute as $valute) {
             $code = (string) $valute->CharCode;
 
-            if (($hasUSD && $code === 'USD') || ($hasEUR && $code === 'EUR')) {
-                $value = (float) str_replace(',', '.', (string) $valute->Value);
-                $vunitRate = (float) str_replace(',', '.', (string) $valute->VunitRate);
-                $rate = [
-                    'UF_DATE' => $date,
-                    'UF_CURRENCY' => (string) $valute->CharCode,
-                    'UF_BUY' => (float) $value,
-                    'UF_SALE' => (float) $vunitRate,
-                ];
+            if ($this->shouldProcessCurrency($code, $hasUSD, $hasEUR)) {
+                $rate = $this->createRateArray($valute, $date);
+                $savedRate = $this->saveRate($rate);
 
-                $result = $this->entityClass::add($rate);
-                if ($result->isSuccess()) {
-                    $rate['ID'] = $result->getId();
-                    $rates[] = $rate;
+                if ($savedRate) {
+                    $rates[] = $savedRate;
                 }
             }
         }
         return $rates;
+    }
+
+    private function shouldProcessCurrency(string $code, bool $hasUSD, bool $hasEUR): bool
+    {
+        return ($hasUSD && $code === 'USD') || ($hasEUR && $code === 'EUR');
+    }
+
+    private function createRateArray(SimpleXMLElement $valute, Date $date): array
+    {
+        return [
+            'UF_DATE' => $date,
+            'UF_CURRENCY' => (string) $valute->CharCode,
+            'UF_BUY' => $this->parseCurrencyValue((string) $valute->Value),
+            'UF_SALE' => $this->parseCurrencyValue((string) $valute->VunitRate),
+        ];
+    }
+
+    private function parseCurrencyValue(string $value): float
+    {
+        return (float) str_replace(',', '.', $value);
+    }
+
+    private function saveRate(array $rate): ?array
+    {
+        $result = $this->entityClass::add($rate);
+        if ($result->isSuccess()) {
+            $rate['ID'] = $result->getId();
+            return $rate;
+        }
+        return null;
     }
 }
